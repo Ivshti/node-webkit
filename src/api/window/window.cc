@@ -269,6 +269,10 @@ void Window::Call(const std::string& method,
     int type;
     if (arguments.GetInteger(0, &type))
       shell_->Reload(static_cast<content::Shell::ReloadType>(type));
+  } else if (method == "BeginOffclientMouseMove") {
+    shell_->window()->BeginOffclientMouseMove();
+  } else if (method == "EndOffclientMouseMove") {
+    shell_->window()->EndOffclientMouseMove();
   } else if (method == "CapturePage") {
     std::string image_format_str;
     if (arguments.GetString(0, &image_format_str))
@@ -294,6 +298,8 @@ void Window::CallSync(const std::string& method,
     result->AppendBoolean(shell_->window()->IsFullscreen());
   } else if (method == "IsKioskMode") {
     result->AppendBoolean(shell_->window()->IsKiosk());
+  } else if (method == "IsTransparent") {
+    result->AppendBoolean(shell_->window()->IsTransparent());
   } else if (method == "GetSize") {
     gfx::Size size = shell_->window()->GetSize();
     result->AppendInteger(size.width());

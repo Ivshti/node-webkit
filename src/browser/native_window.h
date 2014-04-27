@@ -90,6 +90,9 @@ class NativeWindow {
   virtual void SetPosition(const std::string& position) = 0;
   virtual void SetPosition(const gfx::Point& position) = 0;
   virtual gfx::Point GetPosition() = 0;
+  virtual gfx::Point GetMousePosition() = 0;
+  virtual void BeginOffclientMouseMove() = 0;
+  virtual void EndOffclientMouseMove() = 0;
   virtual void SetTitle(const std::string& title) = 0;
   virtual void FlashFrame(bool flash) = 0;
   virtual void SetBadgeLabel(const std::string& badge) = 0;
@@ -98,6 +101,8 @@ class NativeWindow {
   virtual void SetMenu(nwapi::Menu* menu) = 0;
   virtual void SetInitialFocus(bool accept_focus) = 0;
   virtual bool InitialFocus() = 0;
+  virtual void SetTransparent() = 0;
+  virtual bool IsTransparent() = 0;
 
   // Toolbar related controls.
   enum TOOLBAR_BUTTON {

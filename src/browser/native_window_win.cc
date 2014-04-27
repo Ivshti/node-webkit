@@ -25,6 +25,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "base/win/scoped_comptr.h"
+
 #include "base/win/windows_version.h"
 #include "base/win/wrapped_window_proc.h"
 #include "chrome/browser/platform_util.h"
@@ -50,6 +51,10 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/native_widget_win.h"
 #include "ui/views/window/native_frame_view.h"
+
+#include <time.h>
+#include <stdlib.h>
+#include <Dwmapi.h>
 
 namespace nw {
 
@@ -244,6 +249,7 @@ NativeWindowWin::NativeWindowWin(const base::WeakPtr<content::Shell>& shell,
       web_view_(NULL),
       toolbar_(NULL),
       is_fullscreen_(false),
+      is_transparent_(false),
       is_minimized_(false),
       is_maximized_(false),
       is_focus_(false),
@@ -276,7 +282,6 @@ NativeWindowWin::NativeWindowWin(const base::WeakPtr<content::Shell>& shell,
   window_->AddObserver(this);
   window_->SetSize(window_bounds.size());
   window_->CenterWindow(window_bounds.size());
-
   window_->UpdateWindowIcon();
 
   OnViewWasResized();
@@ -292,6 +297,11 @@ void NativeWindowWin::Close() {
 
 void NativeWindowWin::Move(const gfx::Rect& bounds) {
   window_->SetBounds(bounds);
+
+  if(IsTransparent()) {
+    MARGINS mgMarInset = { -1, -1, -1, -1 };
+    DwmExtendFrameIntoClientArea(window_->GetNativeWindow(), &mgMarInset);
+  }
 }
 
 void NativeWindowWin::Focus(bool focus) {
@@ -307,6 +317,13 @@ void NativeWindowWin::Show() {
     window_->native_widget_private()->ShowWithWindowState(ui::SHOW_STATE_INACTIVE);
   } else
     window_->native_widget_private()->Show();
+
+  // We have to re-establish our composition by shaking the compositing surface
+  // TODO: Find a better way of doing this.
+  if(IsTransparent()) {
+    Maximize();
+    Unmaximize();
+  }
 }
 
 void NativeWindowWin::Hide() {
@@ -342,6 +359,48 @@ void NativeWindowWin::SetFullscreen(bool fullscreen) {
 
 bool NativeWindowWin::IsFullscreen() {
   return is_fullscreen_;
+}
+
+void NativeWindowWin::SetTransparent() {
+  is_transparent_ = true;
+  
+  // Check for Windows Vista or higher, transparency isn't supported in 
+  // anything lower. 
+  if (base::win::GetVersion() < base::win::VERSION_VISTA) {
+    NOTREACHED() << "The operating system does not support transparency.";
+    is_transparent_ = false;
+    return;
+  }
+
+  // Check to see if composition is disabled, if so we have to throw an 
+  // error, there's no graceful recovery, yet. TODO: Graceful recovery.
+  BOOL enabled = FALSE;
+  HRESULT result = ::DwmIsCompositionEnabled(&enabled);
+  if (!enabled || !SUCCEEDED(result)) {
+    NOTREACHED() << "Windows DWM composition is not enabled, transparency is not supported.";
+    is_transparent_ = false;
+    return;
+  }
+
+  // These override any other window settings, which isn't the greatest idea
+  // however transparent windows (in Windows) are very tricky and are not 
+  // usable with any other styles.
+  SetWindowLong(window_->GetNativeWindow(), GWL_STYLE, WS_POPUP | WS_SYSMENU | WS_BORDER); 
+  SetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE , WS_EX_COMPOSITED);
+
+  MARGINS mgMarInset = { -1, -1, -1, -1 };
+  if(DwmExtendFrameIntoClientArea(window_->GetNativeWindow(), &mgMarInset) != S_OK) {
+    NOTREACHED() << "Windows DWM extending to client area failed, transparency is not supported.";
+    is_transparent_ = false;
+    return;
+  }
+
+  // Send a message to swap frames and refresh contexts
+  SetWindowPos(window_->GetNativeWindow(), NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
+}
+
+bool NativeWindowWin::IsTransparent() {
+  return is_transparent_;
 }
 
 void NativeWindowWin::SetSize(const gfx::Size& size) {
@@ -447,10 +506,29 @@ void NativeWindowWin::SetPosition(const std::string& position) {
 void NativeWindowWin::SetPosition(const gfx::Point& position) {
   gfx::Rect bounds = window_->GetWindowBoundsInScreen();
   window_->SetBounds(gfx::Rect(position, bounds.size()));
+
+  if(IsTransparent()) {
+    MARGINS mgMarInset = { -1, -1, -1, -1 };
+    DwmExtendFrameIntoClientArea(window_->GetNativeWindow(), &mgMarInset);
+  }
 }
 
 gfx::Point NativeWindowWin::GetPosition() {
   return window_->GetWindowBoundsInScreen().origin();
+}
+
+gfx::Point NativeWindowWin::GetMousePosition() {
+  POINT p;
+  GetCursorPos(&p);
+  return gfx::Point(p.x,p.y);
+}
+
+void NativeWindowWin::BeginOffclientMouseMove() {
+  SetCapture(window_->GetNativeWindow());
+}
+
+void NativeWindowWin::EndOffclientMouseMove() {
+  ReleaseCapture();
 }
 
 void NativeWindowWin::FlashFrame(bool flash) {

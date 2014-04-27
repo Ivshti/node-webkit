@@ -74,12 +74,19 @@ class NativeWindowWin : public NativeWindow,
   virtual void SetPosition(const std::string& position) OVERRIDE;
   virtual void SetPosition(const gfx::Point& position) OVERRIDE;
   virtual gfx::Point GetPosition() OVERRIDE;
+  virtual gfx::Point GetMousePosition() OVERRIDE;
+  virtual void BeginOffclientMouseMove() OVERRIDE;
+  virtual void EndOffclientMouseMove() OVERRIDE;
   virtual void SetTitle(const std::string& title) OVERRIDE;
   virtual void FlashFrame(bool flash) OVERRIDE;
   virtual void SetKiosk(bool kiosk) OVERRIDE;
   virtual void SetBadgeLabel(const std::string& badge) OVERRIDE;
   virtual bool IsKiosk() OVERRIDE;
   virtual void SetMenu(nwapi::Menu* menu) OVERRIDE;
+
+  virtual void SetTransparent() OVERRIDE;
+  virtual bool IsTransparent() OVERRIDE;
+
   virtual void SetToolbarButtonEnabled(TOOLBAR_BUTTON button,
                                        bool enabled) OVERRIDE;
   virtual void SetToolbarUrlEntry(const std::string& url) OVERRIDE;
@@ -138,11 +145,11 @@ class NativeWindowWin : public NativeWindow,
  private:
   friend class content::Shell;
   void OnViewWasResized();
-
   NativeWindowToolbarWin* toolbar_;
   views::WebView* web_view_;
   views::Widget* window_;
   bool is_fullscreen_;
+  bool is_transparent_;
 
   // Flags used to prevent sending extra events.
   bool is_minimized_;
