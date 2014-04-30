@@ -123,6 +123,8 @@ class NativeWindowWin : public NativeWindow,
 
  protected:
   // NativeWindow implementation.
+  bool SetLayeredTransparent();
+  bool SetCompositedTransparent();
   virtual void AddToolbar() OVERRIDE;
   virtual void UpdateDraggableRegions(
       const std::vector<extensions::DraggableRegion>& regions) OVERRIDE;
@@ -146,12 +148,14 @@ class NativeWindowWin : public NativeWindow,
 
  private:
   friend class content::Shell;
+  bool NativeWindowWin::DWMNegativeMarginInset(bool inset);
   void OnViewWasResized();
   NativeWindowToolbarWin* toolbar_;
   views::WebView* web_view_;
   views::Widget* window_;
   bool is_fullscreen_;
   bool is_transparent_;
+
   bool is_blurbehind_;
 
   // Flags used to prevent sending extra events.
@@ -171,6 +175,9 @@ class NativeWindowWin : public NativeWindow,
   gfx::Size maximum_size_;
 
   bool initial_focus_;
+  bool is_layered_transparent_;
+  bool is_composited_transparent_;
+  int old_transparent_flags_;
 
   int last_width_;
   int last_height_;

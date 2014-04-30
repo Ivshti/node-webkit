@@ -44,6 +44,7 @@
 #include "ui/base/hit_test.h"
 #include "ui/gfx/native_widget_types.h"
 #include "ui/gfx/win/hwnd_util.h"
+#include "ui/base/win/shell.h"
 #include "ui/gfx/path.h"
 #include "ui/gfx/image/image_skia_operations.h"
 #include "ui/views/controls/webview/webview.h"
@@ -52,6 +53,7 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/native_widget_win.h"
 #include "ui/views/window/native_frame_view.h"
+#include "content/browser/gpu/gpu_data_manager_impl.h"
 #if defined(OS_WIN)
 #include "content/nw/src/browser/native_window_win.h"
 #include "ui/views/view.h"
@@ -258,6 +260,8 @@ NativeWindowWin::NativeWindowWin(const base::WeakPtr<content::Shell>& shell,
       toolbar_(NULL),
       is_fullscreen_(false),
       is_transparent_(false),
+      is_layered_transparent_(false),
+      is_composited_transparent_(false),
       is_blurbehind_(false),
       is_minimized_(false),
       is_maximized_(false),
@@ -372,41 +376,91 @@ bool NativeWindowWin::IsFullscreen() {
   return is_fullscreen_;
 }
 
-void NativeWindowWin::SetTransparent() {
+bool NativeWindowWin::SetLayeredTransparent() {
+  is_layered_transparent_ = true;
+  is_composited_transparent_ = false;
+  old_transparent_flags_ = GetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE);
+  SetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE, WS_EX_LAYERED);
+  SetWindowPos(window_->GetNativeWindow(), NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
   is_transparent_ = true;
-  
-  // Check for Windows Vista or higher, transparency isn't supported in 
-  // anything lower. 
-  if (base::win::GetVersion() < base::win::VERSION_VISTA) {
-    NOTREACHED() << "The operating system does not support transparency.";
+  return true;
+}
+
+bool NativeWindowWin::SetCompositedTransparent() {
+  is_layered_transparent_ = false;
+
+  // Save the old flags, we'll eventually provide the ability to flip transparency
+  // on and off, however this is problematic as chromium isn't clear how to switch
+  // frame modes without destroying the window, recreating it and moving the content
+  // view.
+  old_transparent_flags_ = GetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE);
+
+  // Rendering on hardware accelerated layers requires WS_EX_COMPOSITED mode,
+  // if Aero isn't supported this will fail, hopefully our caller made sure of
+  // that and used SetTransparent. The window will be made "temporarily" layered
+  // during mouse overs to make sure we can ignore mouse clicks over transparent
+  // areas.
+  SetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE, WS_EX_COMPOSITED);
+
+  // Compositing requires that we use a DWM margins set to -1 to remove the glass window.
+  if(!DWMNegativeMarginInset(true)) {
     is_transparent_ = false;
-    return;
+    is_composited_transparent_ = false;
+    DLOG(ERROR) << "Failed to set transparency, negative margins in DWM declined.";
+    return false;
   }
 
-  // Check to see if composition is disabled, if so we have to throw an 
-  // error, there's no graceful recovery, yet. TODO: Graceful recovery.
-  BOOL enabled = FALSE;
-  HRESULT result = ::DwmIsCompositionEnabled(&enabled);
-  if (!enabled || !SUCCEEDED(result)) {
-    NOTREACHED() << "Windows DWM composition is not enabled, transparency is not supported.";
-    is_transparent_ = false;
-    return;
-  }
-  if(base::win::GetVersion() >= base::win::VERSION_VISTA) VLOG(1) << "Composing is enabled";
-      
-  // These override any other window settings, which isn't the greatest idea
-  // however transparent windows (in Windows) are very tricky and are not 
-  // usable with any other styles.
-  SetWindowLong(window_->GetNativeWindow(), GWL_STYLE, WS_POPUP | WS_SYSMENU | WS_BORDER); 
-  SetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE , WS_EX_COMPOSITED);
+  // Assume success even if click-throughs may still fail.
+  is_transparent_ = true;
+  is_composited_transparent_ = true;
 
-  MARGINS mgMarInset = { -1, -1, -1, -1 };
-  if(DwmExtendFrameIntoClientArea(window_->GetNativeWindow(), &mgMarInset) != S_OK) {
-    NOTREACHED() << "Windows DWM extending to client area failed, transparency is not supported.";
-    is_transparent_ = false;
-    return;
+  // Composited windows do not (even when transparent) support click throughs.  Windows
+  // does not track this information since its a D3D accelerated layer, this trap intersects
+  // the mouse events that are about to come to our window, examines the accelerated layers
+  // transparency on the OS process and decides if the mouse event will go through.  Without
+  // child layered window support (only in Windows 8+) this isn't possible without this semi-hack.
+  //TransparentMousePeekHook = SetWindowsHookEx(WH_MOUSE_LL, TransparentMousePeek, NULL, 0);
+  //TransparentNativeHWND = window_->GetNativeWindow();
+
+  // A failure to hook may not necessarily mean that it didn't work, unfortunately the error result
+  // does not tell us much of anything, however lets track it so if there are problems we can see it
+  // in the error log.
+  //if(TransparentMousePeekHook == NULL) {
+  //  DLOG(ERROR) << "Failed to set transparent mouse hook, peek value was NULL.";
+  //  return false;
+  //}
+  return true;
+}
+
+bool NativeWindowWin::DWMNegativeMarginInset(bool inset) {
+  if(inset) {
+    MARGINS mgMarInset = { -1, -1, -1, -1 };
+    if(DwmExtendFrameIntoClientArea(window_->GetNativeWindow(), &mgMarInset) != S_OK) {
+      return false;
+    }
+  } else {
+    MARGINS mgMarInset = { 0, 0, 0, 0 };
+    if(DwmExtendFrameIntoClientArea(window_->GetNativeWindow(), &mgMarInset) != S_OK) {
+      return false;
+    }
   }
-  
+  return true;
+}
+
+void NativeWindowWin::SetTransparent() {
+  // Both layered and composited transparency styles require that we present ourselves as
+  // a popup style window, using sysmenu and border helps retain familiar resizing, maximizing
+  // and toolbar functionality (but not necessarily their widgets).
+  SetWindowLong(window_->GetNativeWindow(), GWL_STYLE, WS_POPUPWINDOW);
+
+  // Compositing style transparency is only supported on VISTA and above, in addition compositing
+  // must be enabled within the DWM otherwise its running under the same mode as XP.
+  if(base::win::GetVersion() >= base::win::VERSION_VISTA
+      && ui::win::IsAeroGlassEnabled())
+    SetCompositedTransparent();
+  else
+    SetLayeredTransparent();
+	
   if (is_blurbehind_) {
 	// Create and populate the blur-behind structure.
 	DWM_BLURBEHIND bb = {0};
@@ -419,9 +473,6 @@ void NativeWindowWin::SetTransparent() {
 	// Enable blur-behind.
 	DwmEnableBlurBehindWindow(window_->GetNativeWindow(), &bb);
   }
-  
-  // Send a message to swap frames and refresh contexts
-  SetWindowPos(window_->GetNativeWindow(), NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 }
 
 bool NativeWindowWin::IsTransparent() {
@@ -870,10 +921,10 @@ void NativeWindowWin::OnViewWasResized() {
 }
 
 void NativeWindowWin::RenderViewCreated(content::RenderViewHost *render_view_host) {
-  if (is_transparent_) {
-    //content::GpuDataManagerImpl::GetInstance()->DisableHardwareAcceleration();
+   if (is_transparent_ && is_layered_transparent_) {
+    content::GpuDataManagerImpl::GetInstance()->DisableHardwareAcceleration();
     content::RenderWidgetHostViewWin *renderer = (content::RenderWidgetHostViewWin *)render_view_host->GetView();
-    //renderer->SetLayeredWindow(window_->GetNativeWindow());
+    renderer->SetLayeredWindow(window_->GetNativeWindow());
   }
 }
 
