@@ -79,6 +79,8 @@ const char kmShowInTaskbar[] = "show_in_taskbar";
 
 const char kmTransparent[] = "transparent";
 
+const char kmBlurBehind[] = "blurbehind";
+
 // Start with the kiosk mode, see Opera's page for description:
 // http://www.opera.com/support/mastering/kiosk/
 const char kmKiosk[] = "kiosk";

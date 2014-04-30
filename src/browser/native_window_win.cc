@@ -258,6 +258,7 @@ NativeWindowWin::NativeWindowWin(const base::WeakPtr<content::Shell>& shell,
       toolbar_(NULL),
       is_fullscreen_(false),
       is_transparent_(false),
+      is_blurbehind_(false),
       is_minimized_(false),
       is_maximized_(false),
       is_focus_(false),
@@ -293,6 +294,8 @@ NativeWindowWin::NativeWindowWin(const base::WeakPtr<content::Shell>& shell,
   window_->UpdateWindowIcon();
 
   OnViewWasResized();
+  
+  manifest->GetBoolean("blurbehind", &is_blurbehind_);
 }
 
 NativeWindowWin::~NativeWindowWin() {
@@ -404,7 +407,7 @@ void NativeWindowWin::SetTransparent() {
     return;
   }
   
-  /*
+  if (is_blurbehind_) {
 	// Create and populate the blur-behind structure.
 	DWM_BLURBEHIND bb = {0};
 
@@ -415,7 +418,7 @@ void NativeWindowWin::SetTransparent() {
 
 	// Enable blur-behind.
 	DwmEnableBlurBehindWindow(window_->GetNativeWindow(), &bb);
-  */
+  }
   
   // Send a message to swap frames and refresh contexts
   SetWindowPos(window_->GetNativeWindow(), NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
