@@ -26,6 +26,7 @@
 #include "base/strings/utf_string_conversions.h"
 #include "base/values.h"
 #include "content/browser/child_process_security_policy_impl.h"
+#include "content/browser/devtools/devtools_http_handler_impl.h"
 #include "content/browser/renderer_host/render_view_host_impl.h"
 #if defined(OS_WIN)
 #include "content/browser/renderer_host/render_widget_host_view_win.h"
@@ -79,6 +80,7 @@ using nw::NativeWindowWin;
 
 using base::MessageLoop;
 
+using content::DevToolsHttpHandlerImpl;
 namespace content {
 
 std::vector<Shell*> Shell::windows_;
@@ -417,12 +419,17 @@ void Shell::ShowDevTools(const char* jail_id, bool headless) {
       browser_client->shell_browser_main_parts()->devtools_delegate();
   GURL url = delegate->devtools_http_handler()->GetFrontendURL();
 
-  SendEvent("devtools-opened", url.spec());
   if (headless) {
-    // FIXME: DevToolsFrontendHost
+    DevToolsAgentHost* agent_host = DevToolsAgentHost::GetOrCreateFor(inspected_rvh).get();
+
+    url = delegate->devtools_http_handler()->GetFrontendURL(agent_host);
+    DevToolsHttpHandlerImpl* http_handler = static_cast<DevToolsHttpHandlerImpl*>(delegate->devtools_http_handler());
+    http_handler->EnumerateTargets();
+    SendEvent("devtools-opened", url.spec());
     return;
   }
 
+  SendEvent("devtools-opened", url.spec());
   // Use our minimum set manifest
   base::DictionaryValue manifest;
   manifest.SetBoolean(switches::kmToolbar, false);
