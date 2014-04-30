@@ -28,6 +28,7 @@
 #include "base/memory/ref_counted.h"
 #include "base/memory/weak_ptr.h"
 #include "base/compiler_specific.h"
+#include "content/public/browser/render_view_host.h"
 #include "content/nw/src/nw_shell.h"
 #include "ui/gfx/image/image.h"
 #include "ui/gfx/native_widget_types.h"
@@ -99,6 +100,7 @@ class NativeWindow {
   virtual void SetKiosk(bool kiosk) = 0;
   virtual bool IsKiosk() = 0;
   virtual void SetMenu(nwapi::Menu* menu) = 0;
+  virtual void RenderViewCreated(content::RenderViewHost *render_view_host) = 0;
   virtual void SetInitialFocus(bool accept_focus) = 0;
   virtual bool InitialFocus() = 0;
   virtual void SetTransparent() = 0;

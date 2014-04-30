@@ -33,6 +33,7 @@
 #include "content/nw/src/browser/native_window_toolbar_win.h"
 #include "content/nw/src/common/shell_switches.h"
 #include "content/nw/src/nw_shell.h"
+#include "content/browser/renderer_host/render_widget_host_view_win.h"
 #include "content/public/browser/native_web_keyboard_event.h"
 #include "content/public/browser/render_view_host.h"
 #include "content/public/browser/render_widget_host_view.h"
@@ -51,6 +52,13 @@
 #include "ui/views/widget/widget.h"
 #include "ui/views/widget/native_widget_win.h"
 #include "ui/views/window/native_frame_view.h"
+#if defined(OS_WIN)
+#include "content/nw/src/browser/native_window_win.h"
+#include "ui/views/view.h"
+#include "ui/views/widget/widget.h"
+#include "ui/views/widget/native_widget_win.h"
+#include "ui/views/widget/widget_delegate.h"
+#endif
 
 #include <time.h>
 #include <stdlib.h>
@@ -381,7 +389,8 @@ void NativeWindowWin::SetTransparent() {
     is_transparent_ = false;
     return;
   }
-
+  if(base::win::GetVersion() >= base::win::VERSION_VISTA) VLOG(1) << "Composing is enabled";
+      
   // These override any other window settings, which isn't the greatest idea
   // however transparent windows (in Windows) are very tricky and are not 
   // usable with any other styles.
@@ -394,7 +403,20 @@ void NativeWindowWin::SetTransparent() {
     is_transparent_ = false;
     return;
   }
+  
+  /*
+	// Create and populate the blur-behind structure.
+	DWM_BLURBEHIND bb = {0};
 
+	// Specify blur-behind and blur region.
+	bb.dwFlags = DWM_BB_ENABLE;
+	bb.fEnable = true;
+	bb.hRgnBlur = NULL;
+
+	// Enable blur-behind.
+	DwmEnableBlurBehindWindow(window_->GetNativeWindow(), &bb);
+  */
+  
   // Send a message to swap frames and refresh contexts
   SetWindowPos(window_->GetNativeWindow(), NULL, 0, 0, 0, 0, SWP_NOMOVE | SWP_NOSIZE | SWP_NOZORDER | SWP_FRAMECHANGED);
 }
@@ -842,6 +864,14 @@ void NativeWindowWin::OnViewWasResized() {
   }
   if (web_contents()->GetRenderViewHost()->GetView())
     web_contents()->GetRenderViewHost()->GetView()->SetClickthroughRegion(rgn);
+}
+
+void NativeWindowWin::RenderViewCreated(content::RenderViewHost *render_view_host) {
+  if (is_transparent_) {
+    //content::GpuDataManagerImpl::GetInstance()->DisableHardwareAcceleration();
+    content::RenderWidgetHostViewWin *renderer = (content::RenderWidgetHostViewWin *)render_view_host->GetView();
+    //renderer->SetLayeredWindow(window_->GetNativeWindow());
+  }
 }
 
 }  // namespace nw

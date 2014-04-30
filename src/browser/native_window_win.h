@@ -111,6 +111,8 @@ class NativeWindowWin : public NativeWindow,
   virtual gfx::ImageSkia GetWindowIcon() OVERRIDE;
   virtual bool ShouldShowWindowTitle() const OVERRIDE;
   virtual bool ShouldHandleOnSize()    const OVERRIDE;
+  
+  virtual void RenderViewCreated(content::RenderViewHost *render_view_host) OVERRIDE;
 
   // WidgetFocusChangeListener implementation.
   virtual void OnNativeFocusChange(gfx::NativeView focused_before,
