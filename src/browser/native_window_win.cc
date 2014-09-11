@@ -455,12 +455,15 @@ void NativeWindowWin::SetTransparent() {
 
   // Compositing style transparency is only supported on VISTA and above, in addition compositing
   // must be enabled within the DWM otherwise its running under the same mode as XP.
-  if(base::win::GetVersion() >= base::win::VERSION_VISTA
+  /*if(base::win::GetVersion() >= base::win::VERSION_VISTA
       && ui::win::IsAeroGlassEnabled())
     SetCompositedTransparent();
   else
     SetLayeredTransparent();
-	
+*/
+  // Composited transparency has some problems for now - e.g. flashes from time to time
+  SetLayeredTransparent();
+  
   if (is_blurbehind_) {
 	// Create and populate the blur-behind structure.
 	DWM_BLURBEHIND bb = {0};
@@ -811,6 +814,12 @@ void NativeWindowWin::Layout() {
     web_view_->SetBounds(0, 0, width(), height());
   }
   OnViewWasResized();
+  
+  if (is_transparent_ && is_layered_transparent_) {
+      LONG flags = GetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE);
+      SetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE, flags & ~WS_EX_LAYERED);
+      SetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE, flags);
+  }
 }
 
 void NativeWindowWin::ViewHierarchyChanged(
