@@ -971,6 +971,27 @@ void NativeWindowCocoa::InstallDraggableRegionViews() {
   }
 }
 
+gfx::Point NativeWindowCocoa::GetMousePosition() {
+  CGEventRef event = CGEventCreate(NULL);
+  CGPoint cursor = CGEventGetLocation(event);
+  CFRelease(event);
+  return gfx::Point(cursor.x,cursor.y);
+}
+
+void NativeWindowCocoa::BeginOffclientMouseMove() {
+  // Not implemented
+}
+
+void NativeWindowCocoa::EndOffclientMouseMove() {
+  // Not implemented
+}
+
+
+void NativeWindowCocoa::RenderViewCreated(content::RenderViewHost *render_view_host) {
+  
+}
+
+
 NativeWindow* CreateNativeWindowCocoa(const base::WeakPtr<content::Shell>& shell,
                                            base::DictionaryValue* manifest) {
   return new NativeWindowCocoa(shell, manifest);
