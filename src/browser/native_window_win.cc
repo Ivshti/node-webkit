@@ -335,10 +335,11 @@ void NativeWindowWin::Show() {
 
   // We have to re-establish our composition by shaking the compositing surface
   // TODO: Find a better way of doing this.
+  /*
   if(IsTransparent()) {
     Maximize();
     Unmaximize();
-  }
+  }*/
 }
 
 void NativeWindowWin::Hide() {
@@ -370,6 +371,12 @@ void NativeWindowWin::SetFullscreen(bool fullscreen) {
     else
       shell()->SendEvent("leave-fullscreen");
   }
+  if (is_transparent_ && is_layered_transparent_) {
+      LONG flags = GetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE);
+      SetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE, flags & ~WS_EX_LAYERED);
+      SetWindowLong(window_->GetNativeWindow(), GWL_EXSTYLE, flags);
+  } 
+  
 }
 
 bool NativeWindowWin::IsFullscreen() {
@@ -871,6 +878,7 @@ bool NativeWindowWin::ExecuteWindowsCommand(int command_id) {
     if (shell())
       shell()->SendEvent("unmaximize");
   }
+    
   return false;
 }
 
@@ -884,6 +892,7 @@ bool NativeWindowWin::HandleSize(unsigned int param, const gfx::Size& size) {
     if (shell())
       shell()->SendEvent("unmaximize");
   }
+
   return false;
 }
 
