@@ -92,6 +92,8 @@ class Shell : public WebContentsDelegate,
   // Returns the Shell object corresponding to the given RenderViewHost.
   static Shell* FromRenderViewHost(RenderViewHost* rvh);
 
+  static void Cleanup();
+
   void LoadURL(const GURL& url);
   void GoBackOrForward(int offset);
   void Reload(ReloadType type = RELOAD);
